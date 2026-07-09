@@ -20,6 +20,12 @@ dist/
 # 运行产物
 output/
 
+# 离线依赖
+wheels/
+
+# 可执行文件
+*.exe
+
 # 系统文件
 .DS_Store
 Thumbs.db

@@ -6,32 +6,28 @@
 
 ## 快速启动
 
-### 方式一：一键启动（推荐）
-
-双击项目根目录下的 **`YAOSU启动器.exe`**，服务将自动启动并打开浏览器。
-
-> 使用前提：电脑已安装 Python 3.9+ 及项目依赖（见下方"安装依赖"）。
-
-### 方式二：命令行启动
+### 安装依赖
 
 ```bash
-# 1. 安装依赖
 pip install -r requirements.txt
+```
 
-# 2. 启动应用
+### 启动应用
+
+```bash
 streamlit run app.py
 ```
 
 浏览器访问 **http://localhost:8501**。
 
-### 运行分析管道（命令行，不启动网页）
+### 运行分析管道（命令行）
 
 ```bash
 cd src
 python run_all.py
 ```
 
-执行完毕后所有结果输出至 `output/` 目录，最终报告生成为 `final_report.md`。
+执行完毕后所有结果输出至 `output/` 目录。
 
 ## 功能模块
 
@@ -41,7 +37,7 @@ python run_all.py
 - **运营商统计图**：统计各运营商充电站数量
 
 ### 任务二：供需匹配量化
-- **网格供需得分图**：基于 2SFCA 模型计算的 1km×1km 网格供需匹配得分
+- **网格供需得分图**：基于高斯距离衰减的供需匹配得分分布
 - **冷热点分析图**：识别供需热点和冷点区域
 - **服务盲区地图**：识别供给不足的网格区域
 
@@ -54,31 +50,27 @@ python run_all.py
 
 ```
 YAOSU/
-├── app.py                  # Streamlit 交互式 Web 应用（主入口）
-├── main.py                 # 系统入口文件
-├── launcher.py             # 一键启动脚本
-├── YAOSU启动器.exe          # 一键启动可执行文件
-├── README.md               # 项目说明文档
-├── final_report.md         # 最终分析报告
-├── requirements.txt        # Python 依赖清单
-├── data/                   # 数据文件目录
-│   ├── charging_stations_raw.csv
+├── app.py                     # Streamlit 交互式 Web 应用（主入口）
+├── main.py                    # 系统入口文件
+├── launcher.py                # 一键启动脚本
+├── README.md                  # 项目说明文档
+├── requirements.txt           # Python 依赖清单
+├── .gitignore                 # Git 忽略规则
+├── data/                      # 处理后数据
 │   ├── charging_stations_clean.csv
 │   └── charging_stations_xian.geojson
-├── src/                    # 核心源代码
-│   ├── 00_config.py        # 全局配置（路径、参数、关键词）
-│   ├── 01_preprocess_poi.py    # POI 数据预处理
-│   ├── 02_spatial_matching.py  # 空间匹配
-│   ├── 03_regional_analysis.py # 区域分析
-│   ├── 04_supply_demand_model.py   # 供需匹配模型（2SFCA）
+├── src/                       # 核心源代码
+│   ├── 00_config.py               # 全局配置
+│   ├── 01_preprocess_poi.py       # POI 数据预处理
+│   ├── 02_spatial_matching.py     # 空间匹配
+│   ├── 03_regional_analysis.py    # 区域分析
+│   ├── 04_supply_demand_model.py  # 供需匹配模型
 │   ├── 05_location_optimization.py # 选址优化
 │   ├── 06_evaluation.py           # 效果评估
 │   ├── 07_generate_report.py      # 报告生成
-│   ├── run_all.py            # 一键运行全部模块
-│   └── utils.py              # 通用工具函数
-├── output/                 # 运行产物（图表、表格、GeoJSON）
-└── wheels/                 # 离线依赖包
-    └── geopandas-1.1.3-py3-none-any.whl
+│   ├── run_all.py                 # 一键运行全部模块
+│   └── utils.py                   # 通用工具函数
+└── output/                    # 运行产物（图表、表格、GeoJSON），gitignore 排除
 ```
 
 ## 数据文件
@@ -101,8 +93,37 @@ YAOSU/
 
 ## 算法说明
 
-- **2SFCA**：两步移动搜索法，引入高斯距离衰减函数，用于计算网格级供需匹配得分
-- **最大覆盖模型**：整数规划（CBC 求解器）求解最优站点位置
+### 供需匹配模型（高斯距离衰减 + 对数饱和）
+
+采用基于高斯距离衰减的单步可达性分析方法：
+
+\[
+W_{ij} = \exp\left(-\frac{d_{ij}^{2}}{2d_0^{2}}\right)
+\]
+
+其中 \(d_0\) 为用户设定的搜索半径（默认 5000m）；超过搜索半径的衰减权重直接置零。
+
+每个网格的可达供给为所有充电站供给的加权求和：
+
+\[
+\text{可达供给}_i = \sum_j W_{ij} \cdot S_j
+\]
+
+供需比定义为可达供给与需求量的比值：
+
+\[
+\text{供需比}_i = \frac{\text{可达供给}_i}{\text{需求量}_i + 10^{-6}}
+\]
+
+供需得分采用对数饱和函数，将任意正供需比映射到 \((0, 1)\) 区间：
+
+\[
+\text{供需得分}_i = 1 - \frac{1}{1 + \ln\left(1 + \text{供需比}_i + 10^{-3}\right)}
+\]
+
+### 选址优化
+
+- **最大覆盖模型**：整数规划（PuLP + CBC 求解器）求解最优站点位置
 - **贪心算法**：快速启发式算法，作为整数规划的后备方案
 
 ## 技术特点
