@@ -1,5 +1,7 @@
 import sys
 import os
+import matplotlib
+matplotlib.use('Agg')  # Streamlit Cloud 无头环境必须设置
 import numpy as np
 import pandas as pd
 import geopandas as gpd
